@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Storage;
 
 class ExcelProcessCommand extends Command
 {
@@ -38,6 +39,12 @@ class ExcelProcessCommand extends Command
     public function handle()
     {
         $directory = env('PATH_EXCEL_FILES');
+        $directory_json = env('PATH_JSON_FILES');
+        $fileNames = collect(Storage::disk('ftp_excel')->files());
+        $fileNames->each(function ($filename) use($directory) {
+            $contents = Storage::disk('ftp_excel')->get($filename);
+            \File::put($directory.'/'.$filename, $contents);
+        });
         $files = \File::allFiles(base_path($directory));
         foreach ($files as $file) {
             $json = collect();
@@ -52,13 +59,21 @@ class ExcelProcessCommand extends Command
                         $header = $this->parseHeader($data);
                     } else {
                         $row = $this->parseRow($data, $header);
-                        $dat->push($row);
+                        $dat->push(["clientid" => $row['CLIENTE_ID'],
+                                    "name" => $row['NOMBRE'],
+                                    "surname" => $row['APELLIDO'],
+                                    "digits" => $row['SECUENCIAL'],
+                                    "surveycode" => $row['CODIGO_MOMENTO'],
+                                    "email" => $row['CORREO'],
+                                    "clustercode" => $row['CLUSTER'],
+                                    "branchcode" => $row['COD_OFICINA'],
+                                    "abancacode" => $row['CODIGO_ABANCA']]);
                     }
                     $i++;
                 }
             }
             $json->push(['DATA' => $dat->toArray()]);
-            dd($json->toJson());
+            \File::put($directory_json.'/'.explode('.',$file->getFilename())[0].'.json', $json->toJson());
         }
     }
 
