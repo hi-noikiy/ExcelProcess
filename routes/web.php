@@ -14,3 +14,11 @@
 Route::get('/', function () {
     return view('welcome');
 });
+
+Route::get('cronjobs', function () {
+    try{
+        \Artisan::call('excel:process');
+    } catch (\Exception $e){
+        echo $e->getMessage();
+    }
+});

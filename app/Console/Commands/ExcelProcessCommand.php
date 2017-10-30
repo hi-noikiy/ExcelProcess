@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use Carbon\Carbon;
 use GuzzleHttp\Client;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Storage;
@@ -25,7 +26,7 @@ class ExcelProcessCommand extends Command
     protected $description = 'Process files excel and parse to json';
 
 
-    protected $url = 'http://abanca.limetropy.com';
+    protected $url = 'http://abanca.limetropy.com/backend/import/survey/';
     /**
      * Create a new command instance.
      *
@@ -47,45 +48,53 @@ class ExcelProcessCommand extends Command
         $directory_final = env('PATH_JSON_FILES');
         $attach = [];
         $fils = [];
-        /*$fileNames = collect(Storage::disk('ftp_excel')->files());
+        $fils_process = [];
+        $fileNames = collect(Storage::disk('ftp_excel')->files());
         $fileNames->each(function ($filename) use($directory) {
             $contents = Storage::disk('ftp_excel')->get($filename);
             \File::put($directory.'/'.$filename, $contents);
-        });*/
+        });
+
         $files = \File::allFiles(base_path($directory));
         foreach ($files as $file) {
-            $filepath = (string) $file;
+            $filepath = (string)$file;
             $finalFile = '';
-            if(preg_match('/xls/', $file->getFilename())){
+            if (!preg_match('/CL[0-9]{6}/', $file->getFilename())) {
+                continue;
+            }
+            $files = $this->getDataBase();
+            if(in_array($file->getFilename(), $files)){
+                continue;
+            }
+            if (preg_match('/xls/', $file->getFilename())) {
                 $data = $this->processExcel($filepath);
             } else {
                 $data = $this->processTxt($filepath);
             }
-            $fileData = $data->transform(function ($item, $key){
+            $fileData = $data->transform(function ($item, $key) {
                 $client = new Client();
-                try{
-                    $res = $client->post($this->url, ['form_params' => $item]);
-                    if($res->getStatusCode()=='200'){
-                        $status = 'Created';
-                    } else {
-                        $status = 'No created';
-                    }
-                } catch(\GuzzleHttp\Exception\ClientException $e){
+                try {
+                    $url2 = "http://abanca.limetropy.com/backend/import/survey?clientid=" . $item['clientid'] . "&pasoid=" . $item['pasoid'] . "&name=" . $item['name'] . "&surname=" . $item['surname'] . "&digits=" . $item['digits'] . "&surveycode=" . $item['surveycode'] . "&email=" . $item['email'] . "&clustercode=" . $item['clustercode'] . "&branchcode=" . $item['branchcode'] . "&abancacode=" . $item['abancacode'];
+                    $res = $client->request('GET', $url2);
+                    $status = 'Created';
+                } catch (\GuzzleHttp\Exception\ClientException $e) {
                     $status = 'Error';
                     echo $e->getMessage();
                 }
-                return array_merge($item, ['status' =>$status]);
+                return array_merge($item, ['status' => $status]);
             });
             $headers = [];
-            foreach($fileData[0] as $key => $val){
+            foreach ($fileData[0] as $key => $val) {
                 $headers[] = $key;
             }
             $lineHeader = $this->newLine($headers);
             $newContent = $this->newLineAll($fileData);
-            \File::put(base_path($directory_final.'/'.$file->getFilename().'.txt'), $lineHeader.$newContent);
-            $attach[] = base_path($directory_final.'/'.$file->getFilename().'.txt');
-            $fils[] = $file->getFilename().'.txt';
+            \File::put(base_path($directory_final . '/' . $file->getFilename() . '.txt'), $lineHeader . $newContent);
+            $attach[] = base_path($directory_final . '/' . $file->getFilename() . '.txt');
+            $fils[] = $file->getFilename() . '.txt';
+            $fils_process[] = $file->getFilename();
         }
+        $this->putDataBase($fils_process);
         $this->sendMail($attach, $fils);
     }
 
@@ -94,6 +103,7 @@ class ExcelProcessCommand extends Command
         $dat = collect();
         $file = fopen($file,'r');
         $i = 1;
+        $header = [];
         while ($linea = fgets($file)) {
             if($i==1){
                 $header = $this->parseHeaderTxt($linea);
@@ -120,6 +130,7 @@ class ExcelProcessCommand extends Command
         $dat = collect();
         $objPHPExcel = \PHPExcel_IOFactory::load($file);
         $sheetObjs = $objPHPExcel->getAllSheets();
+        $header = [];
         foreach ($sheetObjs as $sheetObj) {
             $i = 1;
             foreach ($sheetObj->getRowIterator(1, null) as $data) {
@@ -247,4 +258,29 @@ class ExcelProcessCommand extends Command
         }
         return substr($newLine,0,strlen($newLine)-1)."\r\n";
     }
+
+    public function getDataBase()
+    {
+        $filepath = storage_path('database/excel-process.txt');
+        if(file_exists($filepath)){
+            $fil = fopen($filepath,'r');
+            while ($linea = fgets($fil)) {
+                return explode(',', $linea);
+            }
+        }
+        return [];
+    }
+
+    public function putDataBase($files)
+    {
+        $filepath = storage_path('database/excel-process.txt');
+        $oldData = $this->getDataBase();
+        $files = array_merge($oldData, $files);
+        $filecontent = '';
+        foreach ($files as $f){
+            $filecontent.= $f.',';
+        }
+        \File::put($filepath, substr($filecontent, 0, strlen($filecontent)-1));
+    }
+
 }
