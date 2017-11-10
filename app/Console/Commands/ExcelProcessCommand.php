@@ -54,6 +54,7 @@ class ExcelProcessCommand extends Command
         $fileNames->each(function ($filename) use($directory) {
             $contents = Storage::disk('ftp_excel')->get($filename);
             \File::put($directory.'/'.$filename, $contents);
+            Storage::disk('ftp_excel')->delete($filename);
         });
 
         $files = \File::allFiles(base_path($directory));
@@ -119,6 +120,7 @@ class ExcelProcessCommand extends Command
             $filepath = (string) $file;
             try{
                 \Storage::disk('sftp_server_final')->put('IN/'.$file->getFilename(), $filecontent);
+                unlink($filepath);
                 $lineas2[] = $file->getFilename();
             } catch (\Exception $e){
                 $lineas3[] = $file->getFilename();
