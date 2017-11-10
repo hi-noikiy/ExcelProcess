@@ -10,9 +10,25 @@
 </head>
 <body>
 <!--CONTENEDOR PADRE-->
-<h4 style="text-align:center">Los siguientes archivos fueron enviados</h4>
+@if(count($lineas)>0)
+<h4 style="text-align:center">Los siguientes archivos contienen registros que no se cargarón, (Se adjuntan en el correo): </h4>
 @foreach($lineas as $l)
     <p>{{$l}}</p>
 @endforeach
+@endif
+
+@if(count($lineas2)>0)
+<h4 style="text-align:center">Se cargaron satisfactoriamente los siguientes archivos al servidor ftp: </h4>
+@foreach($lineas2 as $l)
+    <p>{{$l}}</p>
+@endforeach
+@endif
+
+@if(count($lineas3)>0)
+    <h4 style="text-align:center">Los siguientes archivos no se pudieron cargar al servidor ftp: </h4>
+    @foreach($lineas3 as $l)
+        <p>{{$l}}</p>
+    @endforeach
+@endif
 </body>
 </html>

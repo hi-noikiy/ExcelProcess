@@ -46,6 +46,7 @@ class ExcelProcessCommand extends Command
     {
         $directory = env('PATH_EXCEL_FILES');
         $directory_final = env('PATH_JSON_FILES');
+        $directory_ftp = env('PATH_FTP_FILES');
         $attach = [];
         $fils = [];
         $fils_process = [];
@@ -89,13 +90,41 @@ class ExcelProcessCommand extends Command
             }
             $lineHeader = $this->newLine($headers);
             $newContent = $this->newLineAll($fileData);
-            \File::put(base_path($directory_final . '/' . $file->getFilename() . '.txt'), $lineHeader . $newContent);
-            $attach[] = base_path($directory_final . '/' . $file->getFilename() . '.txt');
-            $fils[] = $file->getFilename() . '.txt';
+            $lineHeaderError = $this->newLine($headers,';', false, 'status');
+            $newContentError = $this->newLineAllError($fileData);
+            if($newContentError!=''){
+                \File::put(base_path($directory_final . '/' . $file->getFilename() . '.txt'), $lineHeaderError . $newContentError);
+                $attach[] = base_path($directory_final . '/' . $file->getFilename() . '.txt');
+                $fils[] = $file->getFilename() . '.txt';
+            }
             $fils_process[] = $file->getFilename();
+            preg_match('/CL[0-9]{6}/', $file->getFilename(), $rest_name);
+            $fi = $directory_ftp.'/ClientesCargados_'.str_replace('CL', '', $rest_name[0]).'.csv';
+            \File::put(base_path($fi), $lineHeader . $newContent);
         }
         $this->putDataBase($fils_process);
-        $this->sendMail($attach, $fils);
+        $lineas2 = $this->sendToFtp();
+        $this->sendMail($attach, $fils, $lineas2);
+    }
+
+    public function sendToFtp()
+    {
+        $directory_ftp = env('PATH_FTP_FILES');
+        $files_ftp = \File::allFiles(base_path($directory_ftp));
+        $lineas2 = [];
+        $lineas3 = [];
+        foreach ($files_ftp as $file)
+        {
+            $filecontent = file_get_contents((string) $file);
+            $filepath = (string) $file;
+            try{
+                \Storage::disk('sftp_server_final')->put('IN/'.$file->getFilename(), $filecontent);
+                $lineas2[] = $file->getFilename();
+            } catch (\Exception $e){
+                $lineas3[] = $file->getFilename();
+            }
+        }
+        return ['lineas2' => $lineas2, 'lineas3' => $lineas3];
     }
 
     public function processTxt($file)
@@ -212,9 +241,9 @@ class ExcelProcessCommand extends Command
         return $response;
     }
 
-    public function sendMail($attach, $files)
+    public function sendMail($attach, $files, $files2)
     {
-        Mail::send('emails.send', ['lineas' => $files],  function ($m) use ($attach) {
+        Mail::send('emails.send', array_merge(['lineas' => $files], $files2),  function ($m) use ($attach) {
             $m->from('processfiles@itwarp.com', 'Process files');
             foreach($attach as $at){
                 $m->attach($at);
@@ -243,10 +272,38 @@ class ExcelProcessCommand extends Command
         return $result;
     }
 
-    public function newLine($array, $delimiter = ';', $comillas = false)
+    public function newLineAllError($arr, $delimiter = ';', $comillas = false)
+    {
+        $result = '';
+        foreach($arr as $array){
+            $newLine = '';
+            if($array['status']=='Error'){
+                foreach ($array as $key => $val){
+                    if($key=='status'){
+                        continue;
+                    }
+                    if($comillas){
+                        $newLine.='"';
+                    }
+                    $newLine.= $val;
+                    if($comillas){
+                        $newLine.='"';
+                    }
+                    $newLine.= ';';
+                }
+                $result.= substr($newLine,0,strlen($newLine)-1)."\r\n";
+            }
+        }
+        return $result;
+    }
+
+    public function newLine($array, $delimiter = ';', $comillas = false, $field = false)
     {
         $newLine = '';
         foreach ($array as $key => $val){
+            if($val==$field && $field){
+                continue;
+            }
             if($comillas){
                 $newLine.='"';
             }
