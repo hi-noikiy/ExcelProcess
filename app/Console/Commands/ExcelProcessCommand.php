@@ -45,6 +45,7 @@ class ExcelProcessCommand extends Command
     public function handle()
     {
         $directory = env('PATH_EXCEL_FILES');
+        $directory_process = env('PATH_PROCESS_FILES');
         $directory_final = env('PATH_JSON_FILES');
         $directory_ftp = env('PATH_FTP_FILES');
         $attach = [];
@@ -65,7 +66,7 @@ class ExcelProcessCommand extends Command
                 continue;
             }
             $files = $this->getDataBase();
-            if(in_array($file->getFilename(), $files)){
+            if (in_array($file->getFilename(), $files)) {
                 continue;
             }
             if (preg_match('/xls/', $file->getFilename())) {
@@ -91,17 +92,18 @@ class ExcelProcessCommand extends Command
             }
             $lineHeader = $this->newLine($headers);
             $newContent = $this->newLineAll($fileData);
-            $lineHeaderError = $this->newLine($headers,';', false, 'status');
+            $lineHeaderError = $this->newLine($headers, ';', false, 'status');
             $newContentError = $this->newLineAllError($fileData);
-            if($newContentError!=''){
+            if ($newContentError != '') {
                 \File::put(base_path($directory_final . '/' . $file->getFilename() . '.txt'), $lineHeaderError . $newContentError);
                 $attach[] = base_path($directory_final . '/' . $file->getFilename() . '.txt');
                 $fils[] = $file->getFilename() . '.txt';
             }
             $fils_process[] = $file->getFilename();
             preg_match('/CL[0-9]{6}/', $file->getFilename(), $rest_name);
-            $fi = $directory_ftp.'/ClientesCargados_'.str_replace('CL', '', $rest_name[0]).'.csv';
+            $fi = $directory_ftp . '/ClientesCargados_' . str_replace('CL', '', $rest_name[0]) . '.csv';
             \File::put(base_path($fi), $lineHeader . $newContent);
+            \File::move(base_path($directory . '/' . $file->getFilename()), base_path($directory_process . '/' . $file->getFilename()));
         }
         $this->putDataBase($fils_process);
         $lineas2 = $this->sendToFtp();
