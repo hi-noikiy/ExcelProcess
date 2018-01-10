@@ -76,6 +76,10 @@ class ExcelProcessCommand extends Command
             }
             $fileData = $data->transform(function ($item, $key) {
                 $client = new Client();
+                $item['branchcode'] = $this->rellenar($item['branchcode'], 'num', 4);
+                $item['abancacode'] = $this->rellenar($item['abancacode'], 'num', 4);
+                $item['digits'] = $this->rellenar($item['digits'], 'num', 4);
+                $item['surveycode'] = $this->rellenar($item['surveycode'], 'num', 4);
                 try {
                     $url2 = "http://abanca.limetropy.com/backend/import/survey?clientid=" . $item['clientid'] . "&pasoid=" . $item['pasoid'] . "&name=" . $item['name'] . "&surname=" . $item['surname'] . "&digits=" . $item['digits'] . "&surveycode=" . $item['surveycode'] . "&email=" . $item['email'] . "&clustercode=" . $item['clustercode'] . "&branchcode=" . $item['branchcode'] . "&abancacode=" . $item['abancacode'];
                     $res = $client->request('GET', $url2);
@@ -84,6 +88,7 @@ class ExcelProcessCommand extends Command
                     $status = 'Error';
                     echo $e->getMessage();
                 }
+                dd($item);
                 return array_merge($item, ['status' => $status]);
             });
             $headers = [];
@@ -342,6 +347,29 @@ class ExcelProcessCommand extends Command
             $filecontent.= $f.',';
         }
         \File::put($filepath, substr($filecontent, 0, strlen($filecontent)-1));
+    }
+
+    public function rellenar($data, $type, $length)
+    {
+        if(strlen($data)>$length){
+            return substr($data, 0, $length);
+        } else if(strlen($data)==$length){
+            return $data;
+        } else {
+            $faltante = '';
+            for($i=0;$i<($length-strlen($data));$i++){
+                if($type=='num'){
+                    $faltante .= '0';
+                } else if($type=='string'){
+                    $faltante .= ' ';
+                }
+            }
+            if($type=='num'){
+                return $faltante.$data;
+            } else if($type=='string'){
+                return $data.$faltante;
+            }
+        }
     }
 
 }
